@@ -132,6 +132,10 @@ void BrFS(){
   //Variable que después me dirá pa qué sirve 
   int city_avoid;
 
+  //Inicializo una variable para el valor Mínimo
+  float valorMinimo = LARGE;
+  node *ruta = NULL;
+
 //2) Inicializamos el nodo inicial/padre ( o "A") 
   parent = create_node();
   //Le asociamos una ciudad al padre, la cual será el nodo inicial 
@@ -253,6 +257,13 @@ void BrFS(){
       parent->d = parent->d + 1;
       parent->g = parent->g + distance_matrix[parent->city][initial_city];
 
+      //Guardo el valor de los resultados en el vector resultados
+      if (parent->g < valorMinimo){
+        valorMinimo = parent->g;
+        ruta = parent->parent;      //Preguntar cómo puedo poner la ruta
+      }
+
+
       //Impresión simple (depende de los printf's anteriores)
       //printf("[%d-%d](%f)",parent->city, parent->d, parent->g);
 
@@ -267,6 +278,10 @@ void BrFS(){
     }
     //printf("\n");
   }
+
+  printf("Valor mínimo: %f", valorMinimo);
+  printf("Ruta: %d", ruta->parent);
+
 }
 
 

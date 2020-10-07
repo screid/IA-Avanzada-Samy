@@ -10,7 +10,7 @@
 //Defino un parámetro global LARGE (número muy grande) y un máximo de ciudades
 #define LARGE 10000000.0
 #define MAX_CITIES 1002
-#define LARGOCOLA 10000 //(QUEUQSIZE)
+#define LARGOCOLA 100 //(QUEUQSIZE)
 
 //Inicializo parámetros 
 //1. Número de ciudades 
@@ -68,8 +68,8 @@ void read_problem(const char *filename)
     rewind (f);
     for (y = 0; y < ncities; y++) {
       for (x = 0; x < 3; x++) {
-	fscanf(f, "%d", &num);
-	if (x > 0) cities_coor[y][x-1] = num;
+        fscanf(f, "%d", &num);
+        if (x > 0) cities_coor[y][x-1] = num;
       }
     }
     fclose (f);
@@ -187,6 +187,12 @@ void BrFS(){
 //4) Procedimiento o ciclo de la búsqueda en anchura:
   //Se hace mientas la cola tenga elementos:
   while (pi < pf){
+
+    //Por si acaso se termina el espacio en la cola 
+    if (pi == LARGOCOLA){
+      pi = 0;
+    }
+
     //Hay que sacar el primer elemento de la cola, y luego avanzo
     parent = queue[pi];
     pi++;
@@ -231,6 +237,11 @@ void BrFS(){
         //Debo ingresar los sucesores a la cola:
         queue[pf] = succ;   //Vamos agregando los sucesores 
         pf++;                //Adicionamos el valor pf.
+
+        //Si me quedo con poco espacio en la cola
+        if (pf == LARGOCOLA){
+          pf = 0;
+        }
       }
       //Después de que termino de recorrer el nodo, tengo que ir al nodo hermano
       state = state->sibling;

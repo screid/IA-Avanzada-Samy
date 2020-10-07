@@ -6,13 +6,11 @@
 #include <unistd.h>
 #include <math.h>
 
-//Defino parámetros globales?(preguntar)
-#define max(x,y) ( (x) > (y) ? (x) : (y) )
-#define min(x,y) ( (x) < (y) ? (x) : (y) )
 
 //Defino un parámetro global LARGE (número muy grande) y un máximo de ciudades
 #define LARGE 10000000.0
 #define MAX_CITIES 1002
+#define LARGOCOLA 10000 //(QUEUQSIZE)
 
 //Inicializo parámetros 
 //1. Número de ciudades 
@@ -27,16 +25,7 @@ int succ_matrix[MAX_CITIES][MAX_CITIES];
 short initial_city;
 //6. Defino una lista con las coordenadas de las ciudades
 int cities_coor[MAX_CITIES][2];
-//7. Defino un upper y un lowerbound 
-double upperbound;
-double lowerbound;
-//8. Define un número de ciudades visitadas
-short cities_visited[MAX_CITIES];
-//9. Me imagino que son variables auxiliares
-long long int expanded = 0;
-long long int pruned = 0;
-long long int touched = 0;
-double w = 0;
+
 
 //Declaro estructuras de datos
 struct node;      //Va a ser un subtour
@@ -52,6 +41,8 @@ struct node{
   node *firstChild;  //Puntero al primer hijo de este nodo padre (nodo de más a la izquierda.
 };
 
+
+
 //Procedimiento para crear nodo (que asigna memoria tmb)
 node *create_node(){
   //1. Creo el nodo nuevo (state) y lo inicializo con ningún valor
@@ -65,7 +56,6 @@ node *create_node(){
 
   return state;
 }
-
 
 
 //Función para leer una instancia
@@ -103,10 +93,27 @@ void distance_matrix_caculation() {
 }
 
 
-//Defino constante
-#define LARGOCOLA 10000 //(QUEUQSIZE)
+//Crea la matriz de sucesores. Ordena las ciudades numéricamente
+void succ_matrix_caculation() {
+  int y,x,j,aux1,aux2;
+  for (y = 0; y < ncities; y++) {
+    for (x = 0; x < ncities; x++) {
+      for (j = 0; j < ncities-1; j++) {
+	if (paso_matrix[y][j] > paso_matrix[y][j+1]) {
+	  aux1 = paso_matrix[y][j];
+	  aux2 = succ_matrix[y][j];
+	  paso_matrix[y][j] = paso_matrix[y][j+1];
+	  succ_matrix[y][j] = succ_matrix[y][j+1];
+	  paso_matrix[y][j+1] = aux1;
+	  succ_matrix[y][j+1] = aux2;
+	}
+      }
+    }
+  }
+}
 
-//Crear procedimiento del Breadth First Search (primera busqueda expansiva)
+
+//Crear procedimiento del Breadth First Search (búsqueda en anchura)
 void BrFS(){
 
 //1) Inicializo 4 datos de tipo nodo, hasta el momento vacíos 
@@ -249,84 +256,6 @@ void BrFS(){
     }
     //printf("\n");
   }
-}
-
-
-//Crea la matriz de sucesores. Ordena las ciudades numéricamente
-void succ_matrix_caculation() {
-  int y,x,j,aux1,aux2;
-  for (y = 0; y < ncities; y++) {
-    for (x = 0; x < ncities; x++) {
-      for (j = 0; j < ncities-1; j++) {
-	if (paso_matrix[y][j] > paso_matrix[y][j+1]) {
-	  aux1 = paso_matrix[y][j];
-	  aux2 = succ_matrix[y][j];
-	  paso_matrix[y][j] = paso_matrix[y][j+1];
-	  succ_matrix[y][j] = succ_matrix[y][j+1];
-	  paso_matrix[y][j+1] = aux1;
-	  succ_matrix[y][j+1] = aux2;
-	}
-      }
-    }
-  }
-}
-
-
-//Función heurística (estimar el costo de un tour/cota inferior)
-//Link: http://citeseerx.ist.psu.edu/viewdoc/download;jsessionid=34E3783104AC1F84D786A71AA1127AD2?doi=10.1.1.331.962&rep=rep1&type=pdf
-double i_int_out(short cities_visited[MAX_CITIES],int city, int missing_cities) 
-{
-  int i,j,added;
-  double value=0;
-  if (missing_cities == 1) return distance_matrix[city][initial_city]; 
-  for (i=0; i<ncities;i++) 
-    if (i!=city && cities_visited[i]==0){ 
-      int city_to_check = i;
-      added = 0;
-      for (j=1; j<ncities;j++){
-		if (cities_visited[succ_matrix[city_to_check][j]] == 0 || succ_matrix[city_to_check][j] == city || succ_matrix[city_to_check][j] == initial_city){
-			added++;
-			value+=distance_matrix[city_to_check][succ_matrix[city_to_check][j]];
-			if (added == 2) break;
-		}
-	  }
-	}
-    for (j=1; j<ncities;j++)
-		if (cities_visited[succ_matrix[initial_city][j]] == 0){
-			value += distance_matrix[initial_city][succ_matrix[initial_city][j]];
-			break;
-		}
-    for (j=1; j<ncities;j++)
-		if (cities_visited[succ_matrix[city][j]] == 0){
-			value += distance_matrix[city][succ_matrix[city][j]];
-			break;
-		}
-  return value/2;
-}
-
-
-//Función heurística anterior con una pequeña mejora.
-double int_out(short cities_visited[MAX_CITIES],int city, int missing_cities) 
-{
-  int i,j,added;
-  double value=0;
-  if (missing_cities == 1) return distance_matrix[city][initial_city]; 
-  for (i=0; i<ncities;i++) 
-    if (i!=city && cities_visited[i]==0){
-      int city_to_check = i;
-      added = 0;
-      for (j=1; j<ncities;j++){
-		if (cities_visited[succ_matrix[city_to_check][j]] == 0 || succ_matrix[city_to_check][j] == city || succ_matrix[city_to_check][j] == initial_city){
-			added++;
-			value+=distance_matrix[city_to_check][succ_matrix[city_to_check][j]];
-			if (added == 2) break;
-		}
-	  }
-	}
-    value += distance_matrix[initial_city][succ_matrix[initial_city][1]];
-    value += distance_matrix[city][succ_matrix[city][1]];
-  
-  return value/2;
 }
 
 

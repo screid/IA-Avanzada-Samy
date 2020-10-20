@@ -10,7 +10,7 @@
 //Defino un parámetro global LARGE (número muy grande) y un máximo de ciudades
 #define LARGE 10000000.0
 #define MAX_CITIES 1002
-#define LARGOCOLA 100 //(QUEUQSIZE)
+#define HEAPSIZE 100000 //(QUEUQSIZE)
 
 //Inicializo parámetros 
 //1. Número de ciudades 
@@ -26,6 +26,10 @@ short initial_city;
 //6. Defino una lista con las coordenadas de las ciudades
 int cities_coor[MAX_CITIES][2];
 
+//7. Contadores
+int generated = 0;    //Cuántos nodos se generan
+int expanded = 0;     //Cuántos nodos se expande
+
 
 //Declaro estructuras de datos
 struct node;      //Va a ser un subtour
@@ -36,6 +40,9 @@ struct node{
   int city;   //ID del nodo
   int d;      //Profundidad, qué tan profundo está en el árbol.
   float g;      //Costo del subtour. Se acumula el valor del subtour en ese momento 
+  float key;    //Clave. Por ahora es como el costo acumulado
+
+
   node *parent;   //Nodo padre del nodo 
   node *sibling;   //Nodo hermano 
   node *firstChild;  //Puntero al primer hijo de este nodo padre (nodo de más a la izquierda.
@@ -113,28 +120,146 @@ void succ_matrix_caculation() {
 }
 
 
-//Crear procedimiento del Breadth First Search (búsqueda en anchura)
-void BrFS(){
+//Crear procedimiento de Djikstra con prioridad
+
+//Se crea el monticulo binario (Binary heap)
+node *heap[HEAPSIZE];
+int heapsize = 0;          //Si es 0 es que está vacío
+
+//Aquí agrego un nodo, asumiendo que el heap parte vacío
+void agregarHeap(node *nodoInsertado){
+
+  //Variable para ver la posición inicial
+  int current_pos = 0;
+  int current_parent = 0;
+  //Nodo auxiliar
+  node *auxNode = NULL;
+  //Inserto el nodo en la posición heapsize en el heap
+  heap[heapsize] = nodoInsertado;
+
+  heapsize++;
+
+  //Si el índice es mayor que 1
+  if (heapsize > 1){
+      current_pos = heapsize - 1;
+      current_parent = (int) (current_pos - 1) / 2;
+
+      while (heap[current_parent]->key > heap[current_pos]-> key ){
+        auxNode = heap[current_pos];
+        heap[current_pos] = heap[current_parent];
+        heap[current_parent] = auxNode;
+        current_pos = current_parent;
+        if (current_pos == 0){
+          break;
+        }
+        current_parent = (int) (current_pos - 1) / 2;
+      } 
+  }
+}  
+
+//Suponemos que tenemos elementos
+node* removerMejor(){
+  node *nodoRetornado = heap[0];
+  node *aux;
+  double min = LARGE;
+
+  //Si tenemos un unico elemento
+  if (heapsize == 1){
+    heapsize--;
+    return nodoRetornado;
+  }
+
+  //Pusimos el elemento en la primera celda
+  heap[0] = heap[heapsize - 1];
+  heapsize--;     //Le disminuyo el largo de la cola en 1
+  
+  //Me queda comparar con los hijos
+  int current_pos = 0;
+  int pos_min;      //Variable para la posición mínima
+
+  int izq = 2*current_pos +1;
+  int der = 2*current_pos +2;
+
+  //Si el nodo izquierdo no tiene hijos,
+  if (izq >= heapsize){
+    return nodoRetornado;
+  }
+
+  //Si el nodo sólo tiene hijo izquierdo,
+  if (der >= heapsize){
+    heap[der]->key = LARGE;
+  }
+
+  //Si el hijo izquierdo es mejor que el derecho
+  if (heap[izq]->key < heap[der]->key ){
+    pos_min = izq;
+    min = heap[izq]->key;
+  }
+  else {
+    pos_min = der;
+    min = heap[der]->key;
+  }
+
+  //Mientras el padre es mayor que el mínimo. Aquí hay que mover el nodo en posición correcta en el heap
+  while(heap[current_pos]->key > min){
+    aux = heap[current_pos];
+    heap[current_pos] = heap[pos_min];
+    heap[pos_min] = aux;
+
+    //Todo esto es para hacer el intercambio:
+    current_pos = pos_min;
+    izq = 2*current_pos +1;
+    der = 2*current_pos +2;
+
+    //Si el nodo izquierdo no tiene hijos,
+    if (izq >= heapsize){
+      break;
+    }
+
+    //Si el nodo sólo tiene hijo izquierdo,
+    if (der >= heapsize){
+      heap[der]->key = LARGE;
+    }
+
+    //Si el hijo izquierdo es mejor que el derecho
+    if (heap[izq]->key < heap[der]->key ){
+      pos_min = izq;
+      min = heap[izq]->key;
+    }
+    else {
+      pos_min = der;
+      min = heap[der]->key;
+    }
+  }
+  return nodoRetornado;
+}
+
+//Función para comprobar si la cola está vacía
+int emptyHeap(){
+  if (heapsize == 0) {
+    return 1;     //Sí está vacía
+  }
+  else{
+    return 0;
+  }
+}
+
+
+
+
+
+void Djikstra(){
 
 //1) Inicializo 4 datos de tipo nodo, hasta el momento vacíos 
   node *parent = NULL;  //Padre
   node *succ = NULL;    //Sucesor
   node *aux = NULL;     //Auxiliar
   node *state = NULL;   //Estado o nodo nuevo
-  //Inicializo la cola con dimensión muy grande
-  node *queue[LARGOCOLA]; 
-  //Inicializo una variable entera que guarda la posición del inicio de la cola
-  int pi = 0;
-  //Variable entera que me indica la posición final de la cola 
-  int pf = 0;
+
   //Contador 
   int i;
   //Variable que después me dirá pa qué sirve 
   int city_avoid;
-
-  //Inicializo una variable para el valor Mínimo
-  float valorMinimo = LARGE;
-  node *ruta = NULL;
 
 //2) Inicializamos el nodo inicial/padre ( o "A") 
   parent = create_node();
@@ -144,16 +269,20 @@ void BrFS(){
   parent->d = 0;
   //Le asociamos el costo acumulado 
   parent->g = 0.0;
+  //Le asociamos el key
+  parent->key = 0.0;
   //Imprimir el estado inicial:
   //printf("[%d]\n",parent->city);
 
 //3) Inicializamos la cola.
   //En la posición final se agrega el padre y la pos. final aumenta en 1
-  queue[pf] = parent;
-  pf++;
+  agregarHeap(parent);
+
+  parent = removerMejor();    //Le elimino el mejor
+
+  expanded++;
+
   //Se expande el estado inicial e insertaremos los nodos sucesores a la cola (Sólo para TSP)
-  parent = queue[pi];   //Padre es el primer elemento de la cola 
-  pi++;                 //Aumento la posición de la cola 
 
   //Empiezo con 0 porque mi ciudad inicial es 0, si fuera otro valor se le cambia. Por lo tanto, empiezo desde la ciudad 1 en adelante.
   for(i = 1; i < ncities; i++){
@@ -162,6 +291,7 @@ void BrFS(){
     succ->city = i;   //Asigno la ciudad
     succ->d = parent->d + 1;
     succ->g = parent->g + distance_matrix[parent->city][succ->city];
+    succ->key = succ->g;
 
     //Imprimo info del succesor
     //printf("[%d-%d](%f)",succ->city, succ->d, succ->g);  
@@ -182,24 +312,29 @@ void BrFS(){
     aux = succ;
 
     //Debo ingresar los sucesores a la cola:
-    queue[pf] = succ;   //Vamos agregando los sucesores 
-    pf++;                //Adicionamos el valor pf.
+    agregarHeap(succ);  //Vamos agregando los sucesores 
 
   }
   //printf("\n");
 
 //4) Procedimiento o ciclo de la búsqueda en anchura:
-  //Se hace mientas la cola tenga elementos:
-  while (pi < pf){
-
-    //Por si acaso se termina el espacio en la cola 
-    if (pi == LARGOCOLA){
-      pi = 0;
-    }
+  //Se hace mientas la cola NO esté vacía
+  while (!(emptyHeap()) ){
 
     //Hay que sacar el primer elemento de la cola, y luego avanzo
-    parent = queue[pi];
-    pi++;
+    parent = removerMejor();
+
+    //Si llegamos al nodo de inicio, que me imprima toda la información
+    if (parent->city == initial_city){
+      printf("costo: %f, nodos expandidos: %d, estados generados: %d \n",parent->g, expanded,generated);
+      while (parent != NULL){
+        printf("[%d] \t",parent->city);
+        parent = parent->parent;
+      }
+      break;
+    }
+
+    expanded++;
 
     //Para generar sucesores: State es el padre de parent. Esto significa que los sucesores de un nodo son los mismos que los hijos de mi padre, menos el nodo.  Obtener el primer hijo del padre de parent 
     state = parent->parent->firstChild;  //Obtengo el primer hijo del padre (es decir, mi hermano)
@@ -214,11 +349,13 @@ void BrFS(){
     while ( state != NULL ){
       //Me aseguro de no tomar mi mismo nodo, por eso gaurde mi ciudad en una variable.
       if (state->city != city_avoid){
+        generated++;
         //Genero los sucesores (o los creo), junto con la ciudad, la profundidad y la distancia recorrida, además del padre 
         succ = create_node();
         succ->city = state->city;   //Ahora la ciudad del sucesor es la ciudad del hermano 
         succ->d = parent->d + 1;
         succ->g = parent->g + distance_matrix[parent->city][succ->city];
+        succ->key = succ->g;
         
         //Imprimo info del succesor
         //printf("[%d-%d](%f)",succ->city, succ->d, succ->g);   
@@ -239,49 +376,27 @@ void BrFS(){
         aux = succ;
 
         //Debo ingresar los sucesores a la cola:
-        queue[pf] = succ;   //Vamos agregando los sucesores 
-        pf++;                //Adicionamos el valor pf.
+        agregarHeap(succ);   //Vamos agregando los sucesores 
 
-        //Si me quedo con poco espacio en la cola
-        if (pf == LARGOCOLA){
-          pf = 0;
-        }
       }
       //Después de que termino de recorrer el nodo, tengo que ir al nodo hermano
       state = state->sibling;
     }
     //Si no tengo más hermanos, entonces significa que no tendré más hijos, por lo que puedo hacer un retorno al nodo inicial.
     if (aux == NULL){
+      generated++;
       //Actualizo los valores de la ciudad, la profundidad y el costo
-      parent->city = initial_city;
-      parent->d = parent->d + 1;
-      parent->g = parent->g + distance_matrix[parent->city][initial_city];
+      succ = create_node();
+      succ->city = initial_city;
+      succ->d = parent->d + 1;
+      succ->g = parent->g + distance_matrix[parent->city][succ->city];
+      succ->key = parent->g;
 
-      //Guardo el valor de los resultados en el vector resultados
-      if (parent->g < valorMinimo){
-        valorMinimo = parent->g;
-        ruta = parent->parent;      //Preguntar cómo puedo poner la ruta
-      }
-
-
-      //Impresión simple (depende de los printf's anteriores)
-      //printf("[%d-%d](%f)",parent->city, parent->d, parent->g);
-
-      //Impresión bkn:
-      printf("Costo: %f. Recorrido: ",parent->g);
-      while(parent->parent != NULL){
-        printf("[%d]",parent->city);
-        parent = parent->parent;
-      }
-      printf("\n");
+      succ->parent = parent;
+      agregarHeap(succ);
 
     }
-    //printf("\n");
   }
-
-  printf("Valor mínimo: %f", valorMinimo);
-  printf("Ruta: %d", ruta->parent);
-
 }
 
 
@@ -289,14 +404,14 @@ void BrFS(){
 int main()
 {
   //read the file and matrix generation
-  ncities = 5;
+  ncities = 6;
   read_problem("./51.mtsp");
   distance_matrix_caculation();
   succ_matrix_caculation();
 
   //Llamar a búsqueda en anchura 
   initial_city = 0;
-  BrFS();
+  Djikstra();
 
   return 0;
 }
